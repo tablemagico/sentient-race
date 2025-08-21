@@ -213,17 +213,38 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
-  function resize(){
-    const wCss = Math.min(520, document.getElementById('gameWrap').clientWidth || 520);
-    const hCss = Math.floor(wCss * 16/9); const d = state.dpr;
-    canvas.style.width = wCss+'px'; canvas.style.height = hCss+'px';
-    canvas.width = Math.floor(wCss * d); canvas.height = Math.floor(hCss * d);
+ function resize() {
+  const wrap = document.getElementById('gameWrap');
+  const hud = document.getElementById('hud');
 
-    const laneWidth = canvas.width / LANES;
-    state.laneX = [ laneWidth*0.5, laneWidth*1.5, laneWidth*2.5 ];
-    state.player.x = state.laneX[state.player.lane];
-    state.player.y = canvas.height - (state.player.h*2.2);
-  }
+  const d = state.dpr;
+  const aspect = 16 / 9;
+
+  // Genişlik limiti: container ve tasarım sınırı
+  const maxWByContainer = Math.min(520, wrap.clientWidth || 520, window.innerWidth - 32);
+
+  // Yükseklik limiti: viewport - HUD - kenar boşlukları
+  const reservedTop = (hud?.offsetHeight || 48) + 24; // HUD + margin
+  const maxHByViewport = Math.max(260, window.innerHeight - reservedTop - 24);
+
+  // 16:9 oran: h = w * (16/9) → w = h * (9/16)
+  const wByHeight = Math.floor(maxHByViewport * (9 / 16));
+
+  const wCss = Math.max(280, Math.min(maxWByContainer, wByHeight));
+  const hCss = Math.floor(wCss * aspect);
+
+  canvas.style.width = wCss + 'px';
+  canvas.style.height = hCss + 'px';
+  canvas.width = Math.floor(wCss * d);
+  canvas.height = Math.floor(hCss * d);
+
+  // Laneler ve oyuncu konumu
+  const laneWidth = canvas.width / LANES;
+  state.laneX = [laneWidth * 0.5, laneWidth * 1.5, laneWidth * 2.5];
+  state.player.x = state.laneX[state.player.lane];
+  state.player.y = canvas.height - (state.player.h * 2.0);
+}
+
   window.addEventListener('resize', resize); resize();
 
   // ============== IMAGES ==============

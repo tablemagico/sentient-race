@@ -14,7 +14,7 @@ function normHandle(h) {
     .replace(/^@/, '')
     .replace(/[^a-z0-9_.-]/g, '')
     .trim()
-    .slice(1, 33); // 32 char
+    .slice(0, 32); // 32 char (ilk karakteri kesme!)
 }
 
 function timeoutFetch(url, ms = 5000) {

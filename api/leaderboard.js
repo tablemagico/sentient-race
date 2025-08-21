@@ -1,6 +1,5 @@
 // api/leaderboard.js
-// Node.js Serverless Function (Vercel) — Leaderboard (READ)
-// Varsayılan namespace: "sentient-race" (ENV ile override edilebilir: LAMUMU_NS)
+// Leaderboard (READ) – default NS: "sentient-race"
 
 module.exports.config = { runtime: 'nodejs' };
 
@@ -12,7 +11,12 @@ function getRedis() {
   const url = process.env.REDIS_URL;
   if (!url) throw new Error('REDIS_URL is not set');
 
-  const opts = {};
+  const opts = {
+    maxRetriesPerRequest: 2,
+    enableReadyCheck: false,
+    connectTimeout: 10_000,
+    retryStrategy: (times) => Math.min(200 * times, 2_000),
+  };
   try {
     const u = new URL(url);
     if (u.protocol === 'rediss:') opts.tls = {};
@@ -37,10 +41,9 @@ module.exports = async (req, res) => {
   try {
     const r = getRedis();
     const NS = getNs();
-    const BOARD_KEY = `${NS}:board`;                 // ZSET (rank)
-    const DETAIL_KEY = (h) => `${NS}:detail:${h}`;   // HASH (score, timeMs, updatedAt)
+    const BOARD_KEY = `${NS}:board`;               // ZSET(rank)
+    const DETAIL_KEY = (h) => `${NS}:detail:${h}`; // HASH(score,timeMs,updatedAt)
 
-    // ?start=0&count=50&rankFor=handle
     const url = new URL(req.url, 'http://localhost');
     const start = Math.max(0, parseInt(url.searchParams.get('start') ?? '0', 10));
     const count = Math.max(1, Math.min(200, parseInt(url.searchParams.get('count') ?? '50', 10)));
@@ -54,7 +57,7 @@ module.exports = async (req, res) => {
     let rank = null;
     if (rankFor) {
       const rv = await r.zrevrank(BOARD_KEY, rankFor);
-      if (rv !== null && rv !== undefined) rank = rv + 1; // 1-based
+      if (rv !== null && rv !== undefined) rank = rv + 1;
     }
 
     let items = [];
@@ -75,8 +78,9 @@ module.exports = async (req, res) => {
 
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ items, start, count, total, rank }));
+    res.end(JSON.stringify({ ns: NS, items, start, count, total, rank }));
   } catch (e) {
+    console.error('leaderboard error:', e);
     res.statusCode = 500;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ error: String(e) }));

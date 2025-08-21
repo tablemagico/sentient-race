@@ -1,6 +1,5 @@
 // api/submit-score.js
-// Node.js Serverless Function (Vercel) — Submit Score (WRITE)
-// Varsayılan namespace: "sentient-race" (ENV ile override edilebilir: LAMUMU_NS)
+// Submit Score (WRITE) – default NS: "sentient-race"
 
 module.exports.config = { runtime: 'nodejs' };
 
@@ -12,7 +11,12 @@ function getRedis() {
   const url = process.env.REDIS_URL;
   if (!url) throw new Error('REDIS_URL is not set');
 
-  const opts = {};
+  const opts = {
+    maxRetriesPerRequest: 2,
+    enableReadyCheck: false,
+    connectTimeout: 10_000,
+    retryStrategy: (times) => Math.min(200 * times, 2_000),
+  };
   try {
     const u = new URL(url);
     if (u.protocol === 'rediss:') opts.tls = {};
@@ -27,7 +31,7 @@ function getNs() {
   return envNs || def;
 }
 
-// Skor sıralaması: önce yüksek score, eşitlikte daha hızlı (timeMs küçük) üste
+// Daha yüksek score ↑, eşitse daha hızlı (timeMs küçük) ↑
 const composite = (score, timeMs) =>
   (Math.floor(score) * 1_000_000_000) - Math.floor(timeMs);
 
@@ -36,11 +40,8 @@ function readJson(req) {
     let data = '';
     req.on('data', (c) => (data += c));
     req.on('end', () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch (e) {
-        reject(e);
-      }
+      try { resolve(data ? JSON.parse(data) : {}); }
+      catch (e) { reject(e); }
     });
     req.on('error', reject);
   });
@@ -67,8 +68,8 @@ module.exports = async (req, res) => {
     let { handle, score, timeMs } = body;
 
     const NS = getNs();
-    const BOARD_KEY = `${NS}:board`;               // ZSET
-    const DETAIL_KEY = (h) => `${NS}:detail:${h}`; // HASH
+    const BOARD_KEY = `${NS}:board`;
+    const DETAIL_KEY = (h) => `${NS}:detail:${h}`;
 
     handle = normHandle(handle);
     score = Number.isFinite(Number(score)) ? Math.max(0, Math.floor(Number(score))) : NaN;
@@ -76,17 +77,12 @@ module.exports = async (req, res) => {
 
     if (!handle || Number.isNaN(score) || Number.isNaN(timeMs)) {
       res.statusCode = 400;
-      res.setHeader('content-type','application/json');
-      res.end(JSON.stringify({ error: 'Invalid payload' }));
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ error: 'Invalid payload', ns: NS }));
       return;
     }
 
-    // (Opsiyonel üst limitler)
-    // timeMs = Math.min(timeMs, 3_600_000); // 1 saat
-    // score  = Math.min(score, 1_000_000);
-
     const r = getRedis();
-
     const cur = await r.zscore(BOARD_KEY, handle);
     const curNum = cur == null ? null : Number(cur);
     const nextScore = composite(score, timeMs);
@@ -106,11 +102,12 @@ module.exports = async (req, res) => {
     }
 
     res.statusCode = 200;
-    res.setHeader('content-type','application/json');
-    res.end(JSON.stringify({ updated }));
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ ns: NS, updated }));
   } catch (e) {
+    console.error('submit-score error:', e);
     res.statusCode = 500;
-    res.setHeader('content-type','application/json');
+    res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ error: String(e) }));
   }
 };

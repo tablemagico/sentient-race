@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sentient Run – 3-Lane Runner</title>
+  <title>Lamumu Run – 3-Lane Runner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
   <style>
     :root{
-      /* Sentient palette */
+      /* Lamumu palette */
       --lamu-blue:#2D6BFF;
       --lamu-red:#FF3B59;
       --lamu-pink:#FF66CC;
@@ -144,10 +144,10 @@
   <!-- Start dialog -->
   <div id="start" class="overlay" role="dialog" aria-modal="true">
     <div class="card grid">
-      <h1 class="title">Sentient Race</h1>
+      <h1 class="title">Lamumu Run 🐄</h1>
       <div class="muted">Enter your X (Twitter) handle; we’ll fetch your avatar and start the game.</div>
       <div class="row">
-        <input id="inputHandle" type="text" placeholder="e.g., sentient_io" autocomplete="off" />
+        <input id="inputHandle" type="text" placeholder="e.g., lamumu_io" autocomplete="off" />
       </div>
       <div class="row">
         <button id="btnStart">Play</button>
@@ -167,7 +167,7 @@
       </div>
       <div class="row">
         <button id="btnAgain">Play Again</button>
-        <a id="dlBtn" download="sentient-score.png"><button class="ghost" style="width:100%">Download Card</button></a>
+        <a id="dlBtn" download="lamumu-score.png"><button class="ghost" style="width:100%">Download Card</button></a>
       </div>
       <div class="row">
         <button id="tweetBtn" class="secondary">Share on X</button>
@@ -177,9 +177,9 @@
 
   <!-- Bottom-right social links -->
   <div id="socialTag" aria-label="social handles">
-    discord: <span style="font-weight:700">cryptoayax</span>
+    discord: <span style="font-weight:700">tablemagicio</span>
     <span class="sep">•</span>
-    x: <a href="https://x.com/cryptoayax" target="_blank" rel="noopener noreferrer">cryptoayax</a>
+    x: <a href="https://x.com/tablemagicio" target="_blank" rel="noopener noreferrer">tablemagicio</a>
   </div>
 
   <script>
@@ -194,7 +194,7 @@
   const REWARD_SPAWN_MS   = [900, 1500];
 
   const PLAYER_W = 54, PLAYER_H = 62;  // cow size (px)
-  const COW_IMG_SRC = 'assets/dobby.png'; // your cow image
+  const COW_IMG_SRC = 'assets/cow.png'; // your cow image
   const REWARD_IMG_SRC = 'assets/reward.png'; // collectible icon (PNG)
 
   // ---- API (Redis leaderboard) ----
@@ -345,7 +345,7 @@
 
   // ============== SHARE & TWEET ==============
   document.getElementById('btnAgain').addEventListener('click', startGame);
-  document.getElementById('tweetBtn').addEventListener('click', ()=>{ const text = encodeURIComponent(`I played Sentient Run! My score: ${state.score} ${state.handle}\n#Sentient`); const url = 'https://twitter.com/intent/tweet?text='+text; window.open(url, '_blank'); });
+  document.getElementById('tweetBtn').addEventListener('click', ()=>{ const text = encodeURIComponent(`I played Lamumu Run! My score: ${state.score} ${state.handle}\n#Lamumu`); const url = 'https://twitter.com/intent/tweet?text='+text; window.open(url, '_blank'); });
 
   function makeFallbackPfpSvg(){ const initials = state.handle && state.handle.length>1 ? state.handle.replace('@','').slice(0,2).toUpperCase() : 'LM'; return `<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'> <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'> <stop offset='0%' stop-color='#2a3a5c'/> <stop offset='100%' stop-color='#162235'/> </linearGradient></defs> <rect width='100%' height='100%' fill='url(#g)'/> <text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle' font-family='Montserrat, sans-serif' font-size='28' fill='#eaf2ff' font-weight='700'>${initials}</text> </svg>`; }
 
@@ -362,7 +362,7 @@
     g.fillStyle = 'rgba(216,119,43,.22)'; g.beginPath(); g.ellipse(W*0.85, H*0.25, 260, 140, 0, 0, Math.PI*2); g.fill();
 
     // header
-    g.fillStyle = '#EDEFF2'; g.font = '900 64px Montserrat, sans-serif'; g.fillText('Sentient RUN', 40, 110);
+    g.fillStyle = '#EDEFF2'; g.font = '900 64px Montserrat, sans-serif'; g.fillText('LAMUMU RUN', 40, 110);
     g.fillStyle = '#dbe3ea'; g.font = '700 28px Montserrat, sans-serif'; g.fillText('Score', 40, 170);
     g.fillStyle = '#7bd389'; g.font = '900 96px Montserrat, sans-serif'; g.fillText(String(score), 40, 260);
 
@@ -375,7 +375,7 @@
 
     // border + footer
     g.strokeStyle = '#D8772B'; g.lineWidth = 6; rounded(g, 12, 12, W-24, H-24, 16); g.stroke();
-    g.fillStyle = '#9fb3d4'; g.font = '600 26px Montserrat, sans-serif'; g.fillText('sentient.io', W-250, H-28);
+    g.fillStyle = '#9fb3d4'; g.font = '600 26px Montserrat, sans-serif'; g.fillText('lamumu.io', W-250, H-28);
 
     return c.toDataURL('image/png');
 

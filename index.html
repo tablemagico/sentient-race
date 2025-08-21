@@ -366,20 +366,67 @@
   document.getElementById('btnStart').addEventListener('click', ()=> beginWithHandle(inputHandle.value.trim()));
   document.getElementById('btnNoX').addEventListener('click', ()=> beginWithHandle(''));
 
-  function beginWithHandle(h){ if (h){ state.handle = h.startsWith('@') ? h : '@'+h; document.getElementById('handle').textContent = state.handle; loadAvatarFor(h); } else { state.handle = '@guest'; document.getElementById('handle').textContent = state.handle; setAvatar(null); } startGame(); resetAndLoadLeaderboard(state.handle.replace('@','')).catch(()=>{}); }
+function beginWithHandle(h){
+  if (h){
+    state.handle = h.startsWith('@') ? h : '@' + h;
+    document.getElementById('handle').textContent = state.handle;
+    const hs = document.getElementById('handleSmall'); 
+    if (hs) hs.textContent = state.handle;
+    loadAvatarFor(h);
+  } else {
+    state.handle = '@guest';
+    document.getElementById('handle').textContent = state.handle;
+    const hs = document.getElementById('handleSmall'); 
+    if (hs) hs.textContent = state.handle;
+    setAvatar(null);
+  }
+  startGame();
+  resetAndLoadLeaderboard(state.handle.replace('@','')).catch(()=>{});
+}
 
   // ============== X AVATAR LOADING (hardened) ==============
-  function candidateAvatarUrls(handle){
+ function candidateAvatarUrls(handle){
   const h = String(handle).replace(/^@/, '');
-  // tek URL: proxy endpoint (same-origin)
   return [ `/api/avatar?handle=${encodeURIComponent(h)}` ];
 }
+
 
   function tryLoad(url){ return new Promise((resolve,reject)=>{ const img=new Image(); img.crossOrigin='anonymous'; img.onload=()=>resolve(url); img.onerror=reject; img.src=url; setTimeout(()=>reject(new Error('timeout')), 6000); }); }
 
   async function resolveWorkingAvatar(handle){ const urls = candidateAvatarUrls(handle); for (const u of urls){ try{ const ok = await tryLoad(u); return ok; }catch(e){} } return null; }
 
-  function setAvatar(src){ const img = document.getElementById('avatar'); if (!src){ img.src = 'data:image/svg+xml;utf8,'+encodeURIComponent(makeFallbackPfpSvg()); state.avatarImg=null; return; } img.crossOrigin='anonymous'; img.src = src; img.onerror = ()=> { img.src = 'data:image/svg+xml;utf8,'+encodeURIComponent(makeFallbackPfpSvg()); state.avatarImg=null; }; img.onload = ()=> { const a = new Image(); a.crossOrigin='anonymous'; a.src = src; a.onload = ()=> state.avatarImg = a; a.onerror = ()=> state.avatarImg=null; } }
+function setAvatar(src){
+  const img = document.getElementById('avatar');
+  const imgSmall = document.getElementById('avatarSmall');
+  const fallback = 'data:image/svg+xml;utf8,' + encodeURIComponent(makeFallbackPfpSvg());
+
+  // kaynak yoksa iki görüntüyü de fallback’e al
+  if (!src){
+    if (img) img.src = fallback;
+    if (imgSmall) imgSmall.src = fallback;
+    state.avatarImg = null;
+    return;
+  }
+
+  // aynı origin proxy olduğu için crossOrigin şart değil; istersen bırakabilirsin
+  if (img){
+    img.crossOrigin = 'anonymous';
+    img.src = src;
+    img.onerror = () => { img.src = fallback; };
+  }
+  if (imgSmall){
+    imgSmall.crossOrigin = 'anonymous';
+    imgSmall.src = src;
+    imgSmall.onerror = () => { imgSmall.src = fallback; };
+  }
+
+  // share card için ayrı Image nesnesi
+  const a = new Image();
+  a.crossOrigin = 'anonymous';
+  a.src = src;
+  a.onload = () => { state.avatarImg = a; };
+  a.onerror = () => { state.avatarImg = null; };
+}
 
   async function loadAvatarFor(handle){ const src = await resolveWorkingAvatar(handle); setAvatar(src); }
 

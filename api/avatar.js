@@ -1,32 +1,27 @@
-
 // api/avatar.js
-// Same-origin avatar proxy: tries external sources for X handle, returns image with good CORS & cache.
-
 module.exports.config = { runtime: 'nodejs' };
 
-const { AbortController } = require('abort-controller'); // Vercel Node 18'de global fetch var; AbortController yoksa bu paketi eklemen gerekmezse çıkar.
 const https = require('https');
+const crypto = require('crypto');
 
-// küçük yardımcılar
 function normHandle(h) {
   return String(h || '')
     .toLowerCase()
     .replace(/^@/, '')
     .replace(/[^a-z0-9_.-]/g, '')
     .trim()
-    .slice(0, 32); // 32 char (ilk karakteri kesme!)
+    .slice(0, 32);
 }
 
-function timeoutFetch(url, ms = 5000) {
+function timeoutFetch(url, ms = 6000, init = {}) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), ms);
   return fetch(url, {
     redirect: 'follow',
     signal: ctrl.signal,
-    // bazı CDN'ler referer'e takılmasın
-    headers: { 'User-Agent': 'sentient-race-avatar/1.0', 'Accept': 'image/*' },
-    // vercel fetch keep-alive default iyi; Node agent eklemek istersen:
-    agent: new https.Agent({ keepAlive: true })
+    headers: { 'User-Agent': 'sentient-race-avatar/1.0', 'Accept': 'image/*,*/*' , ...(init.headers||{})},
+    agent: new https.Agent({ keepAlive: true }),
+    ...init
   }).finally(() => clearTimeout(id));
 }
 
@@ -46,66 +41,103 @@ function makeInitialsSvg(seed) {
   );
 }
 
+function okImageResponse(buf, type = 'image/jpeg', cacheSeconds = 86400) {
+  const etag = `"${crypto.createHash('sha1').update(buf).digest('hex')}"`;
+  return { buf, type, etag, cacheSeconds };
+}
+
+async function getViaXApi(handle) {
+  const token = process.env.X_BEARER || process.env.TWITTER_BEARER_TOKEN;
+  if (!token) return null;
+
+  const u = `https://api.x.com/2/users/by/username/${encodeURIComponent(handle)}?user.fields=profile_image_url`;
+  const r = await timeoutFetch(u, 7000, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) return null;
+
+  const data = await r.json();
+  let url = data?.data?.profile_image_url;
+  if (!url) return null;
+
+  // "normal" → "400x400" (veya original). 400x400 genelde ideal.
+  url = url.replace('_normal.', '_400x400.');
+  const img = await timeoutFetch(url, 7000);
+  if (!img.ok) return null;
+
+  const ab = await img.arrayBuffer();
+  return okImageResponse(Buffer.from(ab), img.headers.get('content-type') || 'image/jpeg');
+}
+
+async function getViaRedirect(handle) {
+  const u = `https://x.com/${encodeURIComponent(handle)}/profile_image?size=original`;
+  const r = await timeoutFetch(u, 7000);
+  if (!r.ok) return null;
+  const ab = await r.arrayBuffer();
+  return okImageResponse(Buffer.from(ab), r.headers.get('content-type') || 'image/jpeg', 3600);
+}
+
+async function getViaPublicAggregators(handle) {
+  const candidates = [
+    `https://unavatar.io/x/${encodeURIComponent(handle)}`,
+    `https://unavatar.io/twitter/${encodeURIComponent(handle)}`,
+    `https://avatar.vercel.sh/${encodeURIComponent(handle)}`,
+    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(handle)}&fontWeight=700`
+  ];
+  for (const c of candidates) {
+    try {
+      const r = await timeoutFetch(c, 7000);
+      if (!r.ok) continue;
+      const ct = r.headers.get('content-type') || '';
+      if (!/^(image\/|application\/svg)/i.test(ct)) continue;
+      const ab = await r.arrayBuffer();
+      return okImageResponse(Buffer.from(ab), ct, 3600);
+    } catch (_) {}
+  }
+  return null;
+}
+
 module.exports = async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
-    const raw = url.searchParams.get('handle') || '';
-    const handle = normHandle(raw);
+    const handle = normHandle(url.searchParams.get('handle') || '');
 
-    // hiç handle yoksa direkt SVG initials
+    // No handle → initials SVG
     if (!handle) {
       const svg = makeInitialsSvg('SR');
       res.statusCode = 200;
       res.setHeader('Content-Type', 'image/svg+xml');
       res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.end(svg);
-      return;
+      return res.end(svg);
     }
 
-    // 1) Unavatar (X/Twitter) – gerçek X avatarı için en iyi şans.
-    // Not: Unavatar genel aggregator’dır. X tarafı bazen sınırlı olabilir ama çoğunlukla çalışır. :contentReference[oaicite:1]{index=1}
-    const candidates = [
-      `https://unavatar.io/x/${encodeURIComponent(handle)}`,
-      `https://unavatar.io/twitter/${encodeURIComponent(handle)}`,
-      `https://unavatar.io/https://x.com/${encodeURIComponent(handle)}`,
-      // 2) Placeholder (gerçek X yerine gradient) – servis ayakta ve hızlı. :contentReference[oaicite:2]{index=2}
-      `https://avatar.vercel.sh/${encodeURIComponent(handle)}`,
-      // 3) DiceBear SVG (placeholder) – son çare. :contentReference[oaicite:3]{index=3}
-      `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(handle)}&fontWeight=700`
-    ];
+    let out =
+      (await getViaXApi(handle)) ||
+      (await getViaRedirect(handle)) ||
+      (await getViaPublicAggregators(handle));
 
-    for (const c of candidates) {
-      try {
-        const up = await timeoutFetch(c, 6000);
-        if (!up.ok) continue;
-
-        const ct = up.headers.get('content-type') || '';
-        // image veya svg ise kabul
-        if (!/^(image\/|application\/svg)/i.test(ct)) continue;
-
-        const ab = await up.arrayBuffer();
-        const buf = Buffer.from(ab);
-        res.statusCode = 200;
-        res.setHeader('Content-Type', ct.includes('svg') ? 'image/svg+xml' : ct);
-        res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.end(buf);
-        return;
-      } catch (_) {
-        // sıradaki kaynağı dene
-      }
+    if (!out) {
+      const svg = makeInitialsSvg(handle);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=604800');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.end(svg);
     }
 
-    // hepsi düşerse initials svg
-    const svg = makeInitialsSvg(handle);
+    // ETag/If-None-Match
+    if (req.headers['if-none-match'] === out.etag) {
+      res.statusCode = 304;
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.end();
+    }
+
     res.statusCode = 200;
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=604800');
+    res.setHeader('Content-Type', out.type);
+    res.setHeader('ETag', out.etag);
+    res.setHeader('Cache-Control', `public, s-maxage=${out.cacheSeconds}, stale-while-revalidate=604800`);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.end(svg);
+    return res.end(out.buf);
   } catch (e) {
-    // en kötü durumda yine svg ver
     const svg = makeInitialsSvg('SR');
     res.statusCode = 200;
     res.setHeader('Content-Type', 'image/svg+xml');

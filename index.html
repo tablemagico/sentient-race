@@ -75,6 +75,18 @@
     .ctrlBtn:active{transform:scale(.98)}
     .left{left:14px}
     .right{right:14px}
+    
+#scoreBox{ display:flex; align-items:center; justify-content:space-between; }
+#scoreBox .scoreRow{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+#scoreBox .scoreValue{ font-weight:800; letter-spacing:.2px; }
+#scoreBox .scoreUser{
+  display:flex; align-items:center; gap:8px;
+  background:rgba(255,255,255,.03);
+  padding:4px 8px; border-radius:999px;
+  border:1px solid rgba(30,106,107,.28)
+}
+#avatarSmall{ width:22px; height:22px; border-radius:50%; object-fit:cover; border:1px solid rgba(216,119,43,.5) }
+#handleSmall{ font-weight:700; opacity:.95 }
 
     /* Right side Leaderboard */
     #leaderboard{background: radial-gradient(70% 90% at 30% 20%, #13181c, #0a0b0d); border:2px solid var(--amber); box-shadow:0 0 16px rgba(216,119,43,.35), 0 0 24px rgba(30,106,107,.25) inset; border-radius:16px; padding:12px; max-height:70vh; overflow:auto}
@@ -118,7 +130,15 @@
     <!-- LEFT: Game -->
     <div>
       <div id="hud">
-        <div id="scoreBox">Score: <span id="score">0</span></div>
+<div id="scoreBox">
+  <div class="scoreRow">
+    <div class="scoreValue">Score: <span id="score">0</span></div>
+    <div class="scoreUser">
+      <img id="avatarSmall" alt="pfp" />
+      <span id="handleSmall">@guest</span>
+    </div>
+  </div>
+</div>
         <div id="userBox" title="X profile">
           <img id="avatar" alt="pfp" src="" />
           <div class="hdl" id="handle">@guest</div>
